@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 )
 
 type HeaderValue string
@@ -49,11 +50,20 @@ func (r *Request) Query(key, value string) *Request {
 }
 
 func (r *Request) Do(method string) (err error) {
-	var schema = "http"
-	if r.ssl {
-		schema = "https"
+
+	var host string
+	if !strings.HasPrefix(r.endpoint, "http") {
+		var schema string
+		if r.ssl {
+			schema = "https"
+		} else {
+			schema = "http"
+		}
+		host = fmt.Sprintf("%s://%s", schema, r.endpoint)
+	} else {
+		host = r.endpoint
 	}
-	fullPath, err := url.JoinPath(fmt.Sprintf("%s://%s", schema, r.endpoint), r.actionPath...)
+	fullPath, err := url.JoinPath(host, r.actionPath...)
 	if err != nil {
 		return
 	}
