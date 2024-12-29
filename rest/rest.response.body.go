@@ -1,8 +1,11 @@
 package rest
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
+	"github.com/lishimeng/go-log"
+	"io"
 	"net/http"
 )
 
@@ -17,11 +20,19 @@ func (r *Request) Response(ptr any) *Request {
 }
 
 func (r *Request) onResponse(resp *http.Response) (err error) {
+	if r.expectedHttpCode == 0 {
+		r.expectedHttpCode = http.StatusOK // 默认200
+	}
+	err = r.handleRespBody(resp)
 	if resp.StatusCode != r.expectedHttpCode {
 		err = errors.New("unexpected http code: " + resp.Status)
-		// TODO 如果有通用的error response结构体，可以在这里解析
 		return
 	}
+
+	return
+}
+
+func (r *Request) handleRespBody(resp *http.Response) (err error) {
 	if r.accept == "application/json" {
 		err = r.jsonResp(resp)
 	}
@@ -29,7 +40,14 @@ func (r *Request) onResponse(resp *http.Response) (err error) {
 }
 
 func (r *Request) jsonResp(resp *http.Response) (err error) {
-	err = json.NewDecoder(resp.Body).Decode(r.respPtr)
+	var buf bytes.Buffer
+	n, err := io.Copy(&buf, resp.Body)
+	if err != nil {
+		return
+	}
+	log.Info("resp body: %d bytes", n)
+	log.Info(string(buf.Bytes()))
+	err = json.NewDecoder(&buf).Decode(r.respPtr)
 	return
 }
 

@@ -55,23 +55,84 @@ func (c *Client) CreateReport(filterFunc ...ReportFilterFunc) (reportId string, 
 	}
 	log.Info("CreateReport: %s", string(bs))
 
-	c.refreshAccessToken()
-	err = rest.NewRequest(c.endPoint, c.ssl).
-		Path(action).
-		Authorization(c.tokenTemp.AccessToken).
-		Header(rest.HeaderUserAgent, c.userAgent).
-		Header("Host", c.endPoint).
+	err = c.sellerRequest().Path(action).
 		Accept("application/json").
-		RequestTime(time.Now()).
 		Expect(http.StatusAccepted).
 		Body(filter).
-		Response(&result).Json()
+		Response(&result).Json(rest.POST)
 
 	if err != nil {
 		return
 	}
 
+	bs, err = json.Marshal(result)
+	if err != nil {
+		return
+	}
+
+	log.Info("result: %s", string(bs))
+
 	reportId = result.ReportId
 
+	return
+}
+
+type ReportResponse struct {
+	Errors []ErrorResponse `json:"errors,omitempty"`
+	ReportPayload
+}
+
+type ReportProcessInfo struct {
+	ProcessingStatus    string `json:"processingStatus,omitempty"`
+	ProcessingStartTime string `json:"processingStartTime,omitempty"`
+	ProcessingEndTime   string `json:"processingEndTime,omitempty"`
+}
+
+type ReportBaseInfo struct {
+	ReportId         string   `json:"reportId,omitempty"`
+	MarketplaceIds   []string `json:"marketplaceIds,omitempty"`
+	ReportDocumentId string   `json:"reportDocumentId,omitempty"`
+	ReportType       string   `json:"reportType,omitempty"`
+}
+
+type ReportPayload struct {
+	ReportBaseInfo
+	DataStartTime string `json:"dataStartTime,omitempty"`
+	DataEndTime   string `json:"dataEndTime,omitempty"`
+	CreatedTime   string `json:"createdTime,omitempty"`
+	ReportProcessInfo
+}
+
+func (c *Client) GetReport(reportId string) (payload ReportPayload, err error) {
+	var action = "/reports/2021-06-30/reports"
+	var result ReportResponse
+	err = c.sellerRequest().Path(action).Path(reportId).
+		Accept("application/json").
+		Expect(http.StatusOK).Response(&result).Json(rest.GET)
+
+	if err != nil {
+		return
+	}
+	payload = result.ReportPayload
+	return
+}
+
+type ReportDocumentResp struct {
+	ReportDocumentId     string `json:"reportDocumentId,omitempty"`
+	Url                  string `json:"url,omitempty"`
+	CompressionAlgorithm string `json:"compressionAlgorithm,omitempty"`
+}
+
+func (c *Client) GetReportDocument(reportDocumentId string) (payload ReportDocumentResp, err error) {
+	var action = "/reports/2021-06-30/reports/documents"
+	var result ReportDocumentResp
+	err = c.sellerRequest().Path(action).Path(reportDocumentId).
+		Accept("application/json").
+		Expect(http.StatusOK).Response(&result).Json(rest.GET)
+
+	if err != nil {
+		return
+	}
+	payload = result
 	return
 }

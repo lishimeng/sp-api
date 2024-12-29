@@ -2,11 +2,18 @@ package rest
 
 import "time"
 
+type HeaderName string
+
 type ContentType string
 
 const (
 	ApplicationJson ContentType = "application/json"
 	FormUrlencoded  ContentType = "application/x-www-form-urlencoded"
+)
+
+const (
+	HeaderUserAgent   HeaderName = "User-Agent"
+	HeaderContentType HeaderName = "Content-Type"
 )
 
 func (r *Request) Accept(h HeaderValue) *Request {

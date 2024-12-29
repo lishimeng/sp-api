@@ -1,17 +1,17 @@
 package lwa
 
 import (
-	"encoding/json"
 	"errors"
-	"github.com/lishimeng/go-log"
-	"io"
-	"net/http"
+	"fmt"
 	"net/url"
-	"strings"
 )
 
 const (
 	apiHost = "https://api.amazon.com"
+)
+
+const (
+	AuthorizeHost = "https://www.amazon.com"
 )
 
 type Client struct {
@@ -19,27 +19,37 @@ type Client struct {
 	clientId            string // 客户端ID
 	clientSecret        string // 密钥
 	defaultRefreshToken string // 默认RefreshToken
+	scopes              []Scope
 }
 
 type GrantType string
 
 const (
+	AuthorizationCode GrantType = "authorization_code"
 	ClientCredentials GrantType = "client_credentials"
 	RefreshToken      GrantType = "refresh_token"
 )
 
 type Scope string
 
+func (s Scope) String() string {
+	return string(s)
+}
+
 const (
-	ScopeNotification  = "sellingpartnerapi::notifications"
-	ScopeAppManagement = "sellingpartnerapi::client_credential:rotation"
-	ScopeMigrationApi  = "sellingpartnerapi::migration"
+	ScopeNotification         Scope = "sellingpartnerapi::notifications"
+	ScopeAppManagement        Scope = "sellingpartnerapi::client_credential:rotation"
+	ScopeMigrationApi         Scope = "sellingpartnerapi::migration"
+	ScopeAdvertisingCampaign  Scope = "advertising::campaign_management"
+	ScopeAdvertisingAudiences Scope = "advertising::audiences"
 )
 
 type TokenOption struct {
-	Gt           GrantType
-	Scope        string
-	RefreshToken string
+	Gt            GrantType
+	Scope         string
+	RefreshToken  string
+	AuthorizeCode string
+	RedirectUri   string
 }
 
 // New 创建客户端. defaultRefreshToken 可选
@@ -58,9 +68,17 @@ var WithGrantType = func(gt GrantType) TokenOptionFunc {
 		c.Gt = gt
 	}
 }
-var WithScope = func(scope string) TokenOptionFunc {
+var WithScope = func(scope ...Scope) TokenOptionFunc {
 	return func(c *TokenOption) {
-		c.Scope = scope
+		if len(scope) > 0 {
+			c.Scope = scope[0].String()
+		}
+	}
+}
+var WithAuthorizeCode = func(code, redirectUri string) TokenOptionFunc {
+	return func(c *TokenOption) {
+		c.RedirectUri = redirectUri
+		c.AuthorizeCode = code
 	}
 }
 var WithRefreshToken = func(rt string) TokenOptionFunc {
@@ -69,70 +87,32 @@ var WithRefreshToken = func(rt string) TokenOptionFunc {
 	}
 }
 
-// Token 申请token
-func (c *Client) Token(opts ...TokenOptionFunc) (at AccessToken, err error) {
-
-	var action = "/auth/o2/token"
-	fullPath, err := url.JoinPath(c.host, action)
+func (c *Client) Code(redirectUri string, scopes ...Scope) (authorizeUrl string, err error) {
+	p, err := url.JoinPath(AuthorizeHost, "/ap/oa")
 	if err != nil {
 		return
 	}
-	var opt TokenOption
-	for _, optFn := range opts {
-		optFn(&opt)
-	}
+	var scope Scope
 
-	data := url.Values{}
-	data.Add("grant_type", string(opt.Gt))
-	data.Add("client_id", c.clientId)
-	data.Add("client_secret", c.clientSecret)
-	if opt.Gt == RefreshToken {
-		data.Add("refresh_token", opt.RefreshToken)
-	} else if opt.Gt == ClientCredentials {
-		data.Add("scope", ScopeNotification)
+	authorizeUrl = fmt.Sprintf("client_id=%s&response_type=code&redirect_uri=%s",
+		c.clientId, redirectUri)
+	if len(scopes) > 0 {
+		scope = scopes[0]
+		authorizeUrl = fmt.Sprintf("%s&scope=%s", authorizeUrl, scope.String())
 	}
+	authorizeUrl = url.PathEscape(authorizeUrl)
+	authorizeUrl = fmt.Sprintf("%s?%s", p, authorizeUrl)
+	return
+}
 
-	log.Info("lwa token:")
-	log.Info("url: %s", fullPath)
-	log.Info("data: %s", data.Encode())
-	req, err := http.NewRequest("POST", fullPath, strings.NewReader(data.Encode()))
+func (c *Client) GetAccessTokenWithCode(authorizeCode string, redirectUri string) (at AccessToken, err error) {
+
+	at, err = c.Token(WithGrantType(AuthorizationCode),
+		WithAuthorizeCode(authorizeCode, redirectUri))
 	if err != nil {
 		return
 	}
-
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded;charset=UTF-8")
-	req.Header.Set("Accept", "application/json")
-
-	resp, err := http.DefaultClient.Do(req)
-
-	if err != nil {
-		log.Info(err)
-		return
-	}
-	defer func() {
-		_ = resp.Body.Close()
-	}()
-	if resp.StatusCode != http.StatusOK {
-		err = errors.New(resp.Status)
-		log.Info(err)
-		bs, _ := io.ReadAll(resp.Body)
-		log.Info(string(bs))
-		return
-	}
-
-	bs, err := io.ReadAll(resp.Body)
-	if err != nil {
-		log.Info(err)
-		return
-	}
-
-	err = json.Unmarshal(bs, &at)
-	if err != nil {
-		log.Info(err)
-		return
-	}
-
-	// 返回token
+	at.RefreshTime() // 刷新时间戳,valid函数生效
 	return
 }
 
@@ -159,6 +139,10 @@ func (c *Client) GetAccessToken(rt ...string) (at AccessToken, err error) {
 func (c *Client) ClientCredentials() (at AccessToken, err error) {
 	at, err = c.Token(WithGrantType(ClientCredentials), WithScope(ScopeNotification))
 	return
+}
+
+func (c *Client) GetClientId() string {
+	return c.clientId
 }
 
 func httpGet(url string, params map[string]string, result *AccessToken) {

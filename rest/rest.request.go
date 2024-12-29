@@ -2,6 +2,7 @@ package rest
 
 import (
 	"fmt"
+	"github.com/lishimeng/go-log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -10,8 +11,6 @@ import (
 type HeaderValue string
 
 type Request struct {
-	//req              *http.Request
-	//client           *SpClient
 	expectedHttpCode int
 	respPtr          any
 	accept           HeaderValue
@@ -71,7 +70,7 @@ func (r *Request) Do(method string) (err error) {
 	// 拼接query
 	query := r.query.Encode()
 	if len(query) > 0 {
-		fullPath = fmt.Sprintf("%s?=%s", fullPath, query)
+		fullPath = fmt.Sprintf("%s?%s", fullPath, query)
 	}
 
 	// 处理request body
@@ -92,6 +91,7 @@ func (r *Request) Do(method string) (err error) {
 	if err != nil {
 		return
 	}
+	log.Info("http response code: [%d]%s", resp.StatusCode, resp.Status)
 	defer func() {
 		_ = resp.Body.Close()
 	}()
@@ -104,18 +104,34 @@ func (r *Request) Get() (err error) {
 	return
 }
 
+// Post 发送Post请求, 默认不携带ContentType, 需要按需设置
 func (r *Request) Post() (err error) {
 	err = r.Do("POST")
 	return
 }
+
+// FormUrlencoded 发送Post FormUrlencoded请求, 默认携带ContentType: application/x-www-form-urlencoded
 func (r *Request) FormUrlencoded() (err error) {
 	r.ContentType(FormUrlencoded)
 	err = r.Do("POST")
 	return
 }
 
-func (r *Request) Json() (err error) {
+type Method string
+
+const (
+	GET  Method = "GET"
+	POST Method = "POST"
+)
+
+// Json 发送Post Json请求, 默认携带ContentType: application/json
+func (r *Request) Json(method Method) (err error) {
 	r.ContentType(ApplicationJson)
-	err = r.Do("POST")
+	err = r.Do(string(method))
+	return
+}
+
+func (r *Request) Download(method Method) (err error) {
+	err = r.Do(string(method))
 	return
 }
