@@ -127,10 +127,11 @@ func (c *Client) adsRequest() *rest.Request {
 	var host = string(c.centralUrl.AdHost)
 	log.Info("rest request: %s[ssl:%t]", host, c.ssl)
 	req := rest.NewRequest(host, c.ssl).
-		Authorization(c.tokenTemp.AccessToken).
+		Header("Authorization", "Bearer "+c.tokenTemp.AccessToken).
 		Header(string(rest.HeaderUserAgent), c.userAgent).
-		Header("Host", host).
-		RequestTime(time.Now())
+		//Header("Host", host).
+		Header("Amazon-Advertising-API-ClientId", c.auth.GetClientId())
+	//RequestTime(time.Now())
 	return req
 }
 

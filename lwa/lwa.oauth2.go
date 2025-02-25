@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"strings"
 )
 
 const (
@@ -101,6 +102,7 @@ func (c *Client) Code(redirectUri string, scopes ...Scope) (authorizeUrl string,
 		authorizeUrl = fmt.Sprintf("%s&scope=%s", authorizeUrl, scope.String())
 	}
 	authorizeUrl = url.PathEscape(authorizeUrl)
+	authorizeUrl = strings.ReplaceAll(authorizeUrl, ":", "%3A")
 	authorizeUrl = fmt.Sprintf("%s?%s", p, authorizeUrl)
 	return
 }
