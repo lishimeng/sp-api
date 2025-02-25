@@ -45,6 +45,7 @@ var WithLwaToken = func(token lwa.AccessToken) OptFunc {
 	}
 }
 
+// WithProfile 设置已知的profile
 var WithProfile = func(profileId string) OptFunc {
 	return func(c *Client) {
 		c.profileId = profileId
@@ -99,4 +100,12 @@ func (c *Client) request() *rest.Request {
 		req = req.Header("WithProfileIdCallback", c.profileId)
 	}
 	return req
+}
+
+func (c *Client) autoCompleteProfile() (err error) {
+	if len(c.profileId) > 0 {
+		return
+	}
+	err = c.GetProfile()
+	return
 }

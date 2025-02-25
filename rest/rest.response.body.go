@@ -35,7 +35,21 @@ func (r *Request) onResponse(resp *http.Response) (err error) {
 func (r *Request) handleRespBody(resp *http.Response) (err error) {
 	if r.accept == "application/json" {
 		err = r.jsonResp(resp)
+	} else if r.accept == "application/vnd.createasyncreportrequest.v3+json" {
+		err = r.jsonAmazonResp(resp)
 	}
+	return
+}
+
+func (r *Request) jsonAmazonResp(resp *http.Response) (err error) {
+	var buf bytes.Buffer
+	n, err := io.Copy(&buf, resp.Body)
+	if err != nil {
+		return
+	}
+	log.Info("resp body: %d bytes", n)
+	log.Info(string(buf.Bytes()))
+	err = json.NewDecoder(&buf).Decode(r.respPtr)
 	return
 }
 

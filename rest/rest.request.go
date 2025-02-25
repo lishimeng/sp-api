@@ -3,6 +3,7 @@ package rest
 import (
 	"fmt"
 	"github.com/lishimeng/go-log"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -125,13 +126,35 @@ const (
 )
 
 // Json 发送Post Json请求, 默认携带ContentType: application/json
-func (r *Request) Json(method Method) (err error) {
-	r.ContentType(ApplicationJson)
+func (r *Request) Json(method Method, contentType ...ContentType) (err error) {
+	if len(contentType) > 0 {
+		r.ContentType(contentType[0])
+	} else {
+		r.ContentType(ApplicationJson) // default content type
+	}
 	err = r.Do(string(method))
 	return
 }
 
-func (r *Request) Download(method Method) (err error) {
-	err = r.Do(string(method))
+func (r *Request) Download(readFunc func(totalSize int64, reader io.Reader)) (err error) {
+	resp, err := http.DefaultClient.Get(r.endpoint)
+	if err != nil {
+		return
+	}
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+
+	if resp.StatusCode != http.StatusOK {
+		err = fmt.Errorf("http response code [%d]", resp.StatusCode)
+		return
+	}
+
+	if readFunc == nil {
+		return
+	}
+
+	readFunc(resp.ContentLength, resp.Body)
+
 	return
 }
